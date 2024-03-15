@@ -1,0 +1,23 @@
+{% macro currents(kml_type, currents_info) -%}
+{% for folder_name, info in currents_info.items() -%}
+		<Folder>
+			<name>{{ folder_name }}</name>
+		{% for idx, data in info.items() -%}
+			<Placemark>
+				<name>{{ data['connect_HHMM'] }} GMT</name>
+				{% if kml_type == 'deployed_ts_uv' -%}
+				<TimeStamp><when>{{ data['connect_ts_Z'] }}</when>
+				</TimeStamp>
+				{% endif -%}
+				<styleUrl>#1_driftDays</styleUrl>
+				<LineString>
+					<altitudeMode>relativeToGround</altitudeMode>
+					<coordinates>
+						{{ data['lon_degrees_start'] }},{{ data['lat_degrees_start'] }},4.999999999999999 {{ data['lon_degrees_end'] }},{{ data['lat_degrees_end'] }},4.999999999999999 
+					</coordinates>
+				</LineString>
+			</Placemark>
+		{% endfor -%}
+		</Folder>
+{% endfor -%}
+{%- endmacro -%}

@@ -1,0 +1,90 @@
+{% macro format_deployment(dict) -%}
+{% for deployment, data in dict.items() -%}
+		<Style id="{{ data['name'] }}Deployment">
+			<IconStyle>
+				<Icon>
+					<href>http://maps.google.com/mapfiles/kml/paddle/ylw-circle.png</href>
+				</Icon>
+				<hotSpot x="0.5" y="0" xunits="fraction" yunits="pixels" units="fraction"/>
+			</IconStyle>
+		</Style>
+		<Style id="{{ data['name'] }}Position">
+			<IconStyle>
+				<scale>2</scale>
+				<Icon>
+					<href>{{ data['glider_tail'] }}</href>
+				</Icon>
+				<hotSpot x="0" y="0.5" xunits="fraction" yunits="pixels" units="fraction"/>
+			</IconStyle>
+		</Style>
+		<StyleMap id="{{ data['name'] }}RecentSurfacing">
+			<Pair>
+				<key>normal</key>
+				<Style id="sn_shaded_dot">
+					<IconStyle>
+						<color>ff0000ff</color>
+						<scale>0.4</scale>
+						<Icon>
+							<href>http://maps.google.com/mapfiles/kml/shapes/shaded_dot.png</href>
+						</Icon>
+					</IconStyle>
+					<LabelStyle>
+						<scale>0</scale>
+					</LabelStyle>
+				</Style>
+			</Pair>
+			<Pair>
+				<key>highlight</key>
+				<Style id="sh_shaded_dot">
+					<IconStyle>
+						<color>ff00ffff</color>
+						<Icon>
+							<href>http://maps.google.com/mapfiles/kml/shapes/shaded_dot.png</href>
+						</Icon>
+					</IconStyle>
+				</Style>
+			</Pair>
+		</StyleMap>
+		<StyleMap id="{{ data['name'] }}Surfacing">
+			<Pair>
+				<key>normal</key>
+				<Style id="sn_shaded_dot">
+					<IconStyle>
+						<color>{{ data['deployment_color'] }}</color>
+						<scale>0.4</scale>
+						<Icon>
+							<href>http://maps.google.com/mapfiles/kml/shapes/shaded_dot.png</href>
+						</Icon>
+					</IconStyle>
+					<LabelStyle>
+						<scale>0</scale>
+					</LabelStyle>
+				</Style>
+			</Pair>
+			<Pair>
+				<key>highlight</key>
+				<Style id="sh_shaded_dot">
+					<IconStyle>
+						<color>ff00ffff</color>
+						<Icon>
+							<href>http://maps.google.com/mapfiles/kml/shapes/shaded_dot.png</href>
+						</Icon>
+					</IconStyle>
+				</Style>
+			</Pair>
+		</StyleMap>
+		<Style id="{{ data['name'] }}Track">
+			<LineStyle>
+				<color>{{ data['deployment_color'] }}</color>
+				<width>4</width>
+			</LineStyle>
+		</Style>
+		<Style id="{{ data['name'] }}Waypoint">
+			<IconStyle>
+				<Icon>
+					<href>http://marine.rutgers.edu/~kerfoot/icons/bullseye_64x64.gif</href>
+				</Icon>
+			</IconStyle>
+		</Style>
+{% endfor -%}
+{%- endmacro -%}

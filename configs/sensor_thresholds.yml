@@ -1,0 +1,6 @@
+m_battery:
+    fail_threshold: 10
+    suspect_span: [10, 15]
+m_vacuum:
+    fail_threshold: 6
+    suspect_span: [6, 9]

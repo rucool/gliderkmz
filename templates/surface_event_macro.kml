@@ -1,0 +1,23 @@
+{% import 'text_box_macro.kml' as text_box_macro -%}
+{% macro surfacing(glider_name, glider_tail, kml_type, surface_event_info) -%}
+{% for folder_name, info in surface_event_info.items() -%}
+		<Folder>
+			<name>{{ folder_name }}</name>
+		{% for idx, data in info.items() -%}
+			<Placemark>
+				<name>{{ data['connect_ts'] }}</name>
+				{% if kml_type in ('deployed_ts', 'deployed_ts_uv') -%}
+				<TimeStamp><when>{{ data['connect_ts_Z'] }}</when>
+				</TimeStamp>
+				{% endif -%}
+				<styleUrl>#{{ glider_name }}{{ data['style_name'] }}</styleUrl>
+				{{ text_box_macro.text_box_popup(glider_tail, data['surface_event_popup']) }}
+					<Point>
+						<altitudeMode>absolute</altitudeMode>
+						<coordinates>{{ data['gps_lon_degrees'] }},{{ data['gps_lat_degrees'] }},4.999999999999999</coordinates>
+						</Point>
+			</Placemark>
+		{% endfor -%}
+		</Folder>
+{% endfor -%}
+{%- endmacro -%}
