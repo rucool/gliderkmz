@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio on 2/28/2024
-Last modified: lgarzio on 3/15/2024
+Last modified: lgarzio on 3/21/2024
 Test glider kmz generation
 """
 
@@ -22,28 +22,39 @@ from jinja2 import Environment, FileSystemLoader
 pd.set_option('display.width', 320, "display.max_columns", 10)
 
 
-def add_sensor_values(data_dict, sensor_name, sdf):
+def add_sensor_values(data_dict, sensor_name, sdf, thresholds=None):
     """
-    Find data from a sensor within a specific time range (+/- 5 minutes from surface disconnect time). Add the median
-    of the values to the dictionary summaries
+    Find data from a sensor within a specific time range (-5 minutes from surface connect time thru +5 minutes from
+    surface disconnect time). Add the median of the values to the dictionary summaries
     """
-    yml_file = '/Users/garzio/Documents/repo/lgarzio/gliderkmz/configs/sensor_thresholds.yml'
-    with open(yml_file) as f:
-        sensor_thresholds = yaml.safe_load(f)
-    thresholds = sensor_thresholds[sensor_name]
+    if thresholds:
+        try:
+            sthresholds = thresholds[sensor_name]
+        except KeyError:
+            sthresholds = None
+    else:
+        sthresholds = None
 
-    ts = pd.to_datetime(data_dict['disconnect_ts'])
-    t0 = ts - pd.Timedelta(minutes=5)
-    t1 = ts + pd.Timedelta(minutes=5)
+    cts = pd.to_datetime(data_dict['connect_ts'])
+    dcts = pd.to_datetime(data_dict['disconnect_ts'])
+    t0 = cts - pd.Timedelta(minutes=5)
+    t1 = dcts + pd.Timedelta(minutes=5)
 
     try:
         sensor_value = np.round(np.median(sdf.loc[np.logical_and(sdf.ts >= t0, sdf.ts <= t1)].value), 2)
-        if sensor_value <= thresholds['fail_threshold']:
-            bgcolor = 'darkred'
-        elif thresholds['suspect_span'][0] < sensor_value < thresholds['suspect_span'][1]:
+        if np.isnan(sensor_value):
+            sensor_value = None
             bgcolor = 'BEA60E'  # yellow BEA60E
         else:
-            bgcolor = 'green'
+            if sthresholds:
+                if sensor_value <= sthresholds['fail_threshold']:
+                    bgcolor = 'darkred'
+                elif sthresholds['suspect_span'][0] < sensor_value < sthresholds['suspect_span'][1]:
+                    bgcolor = 'BEA60E'  # yellow BEA60E
+                else:
+                    bgcolor = 'green'
+            else:
+                bgcolor = 'BEA60E'  # yellow BEA60E
     except IndexError:
         sensor_value = None
         bgcolor = 'BEA60E'  # yellow BEA60E
@@ -118,7 +129,12 @@ def main(args):
     deployment = args.deployment
     kml_type = args.kml_type
 
-    sensor_list = ['m_battery', 'm_vacuum']
+    sensor_list = ['m_battery', 'm_vacuum', 'm_water_vx', 'm_water_vy']
+
+    sensor_thresholds_yml = '/Users/garzio/Documents/repo/lgarzio/gliderkmz/configs/sensor_thresholds.yml'
+    with open(sensor_thresholds_yml) as f:
+        sensor_thresholds = yaml.safe_load(f)
+
     templatedir = '/Users/garzio/Documents/repo/rucool/gliderkmz/templates/'
 
     savedir = '/Users/garzio/Documents/repo/rucool/gliderkmz/files/'
@@ -235,8 +251,8 @@ def main(args):
         ls_gps_lon_degrees = ls_api['gps_lon_degrees']
 
         # add values for battery and vacuum to the last surfacing information
-        for sensor in sensor_list:
-            add_sensor_values(last_surfacing_popup_dict, sensor, sensor_data[sensor])
+        for sensor in ['m_battery', 'm_vacuum']:
+            add_sensor_values(last_surfacing_popup_dict, sensor, sensor_data[sensor], thresholds=sensor_thresholds)
 
         # add dive information (time, distance, speed)
         last_surfacing_popup_dict['dive_time'] = int(np.round(ls_api['dive_time_seconds'] / 60))  # minutes
@@ -349,18 +365,26 @@ def main(args):
             except KeyError:
                 currents_dict[currents_folder_name] = dict()
 
-            # calculate depth-average currents  **************TO DO**************
-            lon_deg_end = se['gps_lon_degrees'] - .05
-            lat_deg_end = se['gps_lat_degrees'] - .05
-
+            # build dictionary for depth-averaged currents
             currents_dict[currents_folder_name][idx] = dict(
                 connect_HHMM=connect_datetime.strftime('%H:%M'),
                 connect_ts_Z=connect_datetime.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                connect_ts=surface_event_popup['connect_ts'],
+                disconnect_ts=surface_event_popup['disconnect_ts'],
                 lon_degrees_start=se['gps_lon_degrees'],
-                lat_degrees_start=se['gps_lat_degrees'],
-                lon_degrees_end=lon_deg_end,
-                lat_degrees_end=lat_deg_end,
+                lat_degrees_start=se['gps_lat_degrees']
             )
+
+            # calculate depth-averaged currents  **************TO DO**************
+            # find the m_water_vx and m_water_vy for this surfacing
+            for sensor in ['m_water_vx', 'm_water_vy']:
+                add_sensor_values(currents_dict[folder_name][idx], sensor, sensor_data[sensor])
+
+            lon_deg_end = se['gps_lon_degrees'] - .05
+            lat_deg_end = se['gps_lat_degrees'] - .05
+
+            currents_dict[currents_folder_name][idx]['lon_degrees_end'] = lon_deg_end
+            currents_dict[currents_folder_name][idx]['lat_degrees_end'] = lat_deg_end
 
             surface_events_dict[folder_name][idx] = dict(
                 connect_ts=surface_event_popup['connect_ts'],
@@ -371,9 +395,10 @@ def main(args):
                 surface_event_popup=surface_event_popup
             )
 
-            # add data from sensors to the popup
-            for sensor in sensor_list:
-                add_sensor_values(surface_events_dict[folder_name][idx]['surface_event_popup'], sensor, sensor_data[sensor])
+            # add values for battery and vacuum to the surface event popup
+            for sensor in ['m_battery', 'm_vacuum']:
+                add_sensor_values(surface_events_dict[folder_name][idx]['surface_event_popup'],
+                                  sensor, sensor_data[sensor], thresholds=sensor_thresholds)
 
             # add dive information to the surfacing event (time, distance, speed)
             surface_events_dict[folder_name][idx]['surface_event_popup']['dive_time'] = None  # minutes
@@ -395,9 +420,9 @@ def main(args):
                 deployment_gps_lat_degrees = se['gps_lat_degrees']
                 deployment_gps_lon_degrees = se['gps_lon_degrees']
 
-                # add values for battery and vacuum to deployment information
-                for sensor in sensor_list:
-                    add_sensor_values(deployment_popup_dict, sensor, sensor_data[sensor])
+                # add values for battery and vacuum to deployment information popup
+                for sensor in ['m_battery', 'm_vacuum']:
+                    add_sensor_values(deployment_popup_dict, sensor, sensor_data[sensor], thresholds=sensor_thresholds)
 
                 # add dive information (time, distance, speed)
                 deployment_popup_dict['dive_time'] = None  # minutes
