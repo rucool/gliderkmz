@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio on 2/28/2024
-Last modified: lgarzio on 3/21/2024
+Last modified: lgarzio on 3/28/2024
 Test glider kmz generation
 """
 
@@ -19,6 +19,7 @@ import requests
 import simplekml
 import yaml
 from jinja2 import Environment, FileSystemLoader
+from oceans.ocfis import uv2spdir, spdir2uv
 pd.set_option('display.width', 320, "display.max_columns", 10)
 
 
@@ -108,6 +109,21 @@ def build_popup_dict(data):
     return popup_dict
 
 
+def convert_glider_currents(u, v, mag):
+    # written by Mike Smith
+
+    # Convert to speed and direction
+    ang, spd = uv2spdir(u, v)
+
+    # Convert magnetic heading to true heading
+    true_heading = ang - mag
+
+    # Convert back to u and v
+    ul, vl = spdir2uv(spd, true_heading, deg=True)
+
+    return ul, vl
+
+
 def convert_nmea_degrees(x):
     """
     Convert lat/lon coordinates from nmea to decimal degrees
@@ -129,7 +145,7 @@ def main(args):
     deployment = args.deployment
     kml_type = args.kml_type
 
-    sensor_list = ['m_battery', 'm_vacuum', 'm_water_vx', 'm_water_vy']
+    sensor_list = ['m_battery', 'm_vacuum', 'm_water_vx', 'm_water_vy', 'm_gps_mag_var']
 
     sensor_thresholds_yml = '/Users/garzio/Documents/repo/lgarzio/gliderkmz/configs/sensor_thresholds.yml'
     with open(sensor_thresholds_yml) as f:
@@ -239,10 +255,11 @@ def main(args):
         sensor_data = dict()
         for sensor in sensor_list:
             sensor_api = requests.get(f'{glider_api}sensors/?deployment={deployment_name}&sensor={sensor}').json()['data']
-            sensor_df = pd.DataFrame(sensor_api)
-            sensor_df.sort_values(by='epoch_seconds', inplace=True, ignore_index=True)
-            sensor_df['ts'] = pd.to_datetime(sensor_df['ts'])
-            sensor_data[sensor] = sensor_df
+            if len(sensor_api) > 0:
+                sensor_df = pd.DataFrame(sensor_api)
+                sensor_df.sort_values(by='epoch_seconds', inplace=True, ignore_index=True)
+                sensor_df['ts'] = pd.to_datetime(sensor_df['ts'])
+                sensor_data[sensor] = sensor_df
 
         # build the dictionary for the last surfacing information
         ls_api = deployment_api['last_surfacing']
@@ -377,11 +394,27 @@ def main(args):
 
             # calculate depth-averaged currents  **************TO DO**************
             # find the m_water_vx and m_water_vy for this surfacing
-            for sensor in ['m_water_vx', 'm_water_vy']:
+            for sensor in ['m_water_vx', 'm_water_vy', 'm_gps_mag_var']:
+                try:
+                    sensor_data[sensor]
+                except KeyError:
+                    print('figure out what to do when m_gps_mag_var is missing')  # see Joe's email
+
                 add_sensor_values(currents_dict[folder_name][idx], sensor, sensor_data[sensor])
 
-            lon_deg_end = se['gps_lon_degrees'] - .05
-            lat_deg_end = se['gps_lat_degrees'] - .05
+            # rotate from magnetic plane to true plane
+            u, v = convert_glider_currents(currents_dict[folder_name][idx]['m_water_vx'],
+                                           currents_dict[folder_name][idx]['m_water_vy'],
+                                           currents_dict[folder_name][idx]['m_gps_mag_var'])
+
+            angle, speed = uv2spdir(u, v)
+
+            lon_deg_end = se['gps_lon_degrees'] - .05  # these are placeholders
+            lat_deg_end = se['gps_lat_degrees'] - .05  # these are placeholders
+
+            # TODO: finish the currents piece
+            # TODO: add current info to the popup
+            # TODO: calculate where the glider will be in 1 day floating at surface and replace lon_deg_end and lat_deg_end with that
 
             currents_dict[currents_folder_name][idx]['lon_degrees_end'] = lon_deg_end
             currents_dict[currents_folder_name][idx]['lat_degrees_end'] = lat_deg_end
