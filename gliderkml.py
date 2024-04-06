@@ -20,6 +20,7 @@ import simplekml
 import yaml
 from jinja2 import Environment, FileSystemLoader
 from oceans.ocfis import uv2spdir, spdir2uv
+from magnetic_field_calculator import MagneticFieldCalculator
 pd.set_option('display.width', 320, "display.max_columns", 10)
 
 
@@ -260,6 +261,23 @@ def main(args):
                 sensor_df.sort_values(by='epoch_seconds', inplace=True, ignore_index=True)
                 sensor_df['ts'] = pd.to_datetime(sensor_df['ts'])
                 sensor_data[sensor] = sensor_df
+        
+        # add m_gps_mag_var proxy if not being sent back
+        if 'm_water_vx' in sensor_data.keys() and 'm_water_vy' in sensor_data.keys() and 'm_gps_mag_var' not in sensor_data.keys():
+            calculator = MagneticFieldCalculator()
+            sensor_df = sensor_data['m_water_vx'][['ts', 'epoch_seconds', 'lat', 'lon']].copy()
+            sensor_df.insert(0, 'sensor', 'calculated_declination')
+            sensor_df.insert(1, 'units', 'rad')
+            sensor_df.insert(2, 'value', np.nan)
+            sensor_df['date'] = sensor_df['ts'].dt.date
+            for d in np.unique(sensor_df['date']):
+                di = sensor_df['date']==d
+                result = calculator.calculate(latitude=np.nanmedian(sensor_df['lat'][di]),
+                                longitude=np.nanmedian(sensor_df['lon'][di]),
+                                altitude=0,
+                                date=d)
+                sensor_df.loc[di,'value'] = -result['field-value']['declination']['value']*np.pi/180
+            sensor_data['m_gps_mag_var'] = sensor_df
 
         # build the dictionary for the last surfacing information
         ls_api = deployment_api['last_surfacing']
