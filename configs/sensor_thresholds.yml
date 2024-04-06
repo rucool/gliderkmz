@@ -3,8 +3,8 @@
 # battery < 13.25 red, 14 orange, >14 green
 # vacuum < 6 >12.5 red,   rest green
 m_battery:
-    fail_threshold: 13.25
-    suspect_span: [13.25, 14]
+    fail_low: 13.25
+    suspect_low: 14
 m_vacuum:
-    fail_threshold: 6
-    suspect_span: [6, 9]
+    fail_low: 6
+    fail_high: 12.5
