@@ -49,12 +49,15 @@ def add_sensor_values(data_dict, sensor_name, sdf, thresholds=None):
             bgcolor = 'BEA60E'  # yellow BEA60E
         else:
             if sthresholds:
-                if sensor_value <= sthresholds['fail_threshold']:
-                    bgcolor = 'darkred'
-                elif sthresholds['suspect_span'][0] < sensor_value < sthresholds['suspect_span'][1]:
+                bgcolor = 'green'
+                if 'suspect_low' in sthresholds.keys() and sensor_value <= sthresholds['suspect_low']:
                     bgcolor = 'BEA60E'  # yellow BEA60E
-                else:
-                    bgcolor = 'green'
+                elif 'suspect_high' in sthresholds.keys() and sensor_value <= sthresholds['suspect_high']:
+                    bgcolor = 'BEA60E'  # yellow BEA60E
+                elif 'fail_low' in sthresholds.keys() and sensor_value <= sthresholds['fail_low']:
+                    bgcolor = 'darkred'  # yellow BEA60E
+                elif 'fail_high' in sthresholds.keys() and sensor_value <= sthresholds['fail_high']:
+                    bgcolor = 'darkred'  # yellow BEA60E
             else:
                 bgcolor = 'BEA60E'  # yellow BEA60E
     except IndexError:
@@ -74,11 +77,11 @@ def build_popup_dict(data):
     gps_connect_ts = format_ts_epoch(data['gps_timestamp_epoch'])
 
     gps_connect_timedelta = dt.datetime.fromtimestamp(data['connect_time_epoch'], dt.UTC) - dt.datetime.fromtimestamp(data['gps_timestamp_epoch'], dt.UTC)
-    if gps_connect_timedelta.seconds >= 3600:  # 3600 = 1 hour
+    if gps_connect_timedelta.seconds >= 30*60:  # 30 minutes (per Dave slack message 4/1/2024)
         gps_bgcolor = 'darkred'
-    elif 3600 > gps_connect_timedelta.seconds > 600:  # between 10 mins (600) and 1 hour (3600)
-        gps_bgcolor = 'BEA60E'  # yellow BEA60E
-    else:  # < 10 minutes
+    # elif gps_connect_timedelta.seconds > 10*6:  # between 10 mins and fail (above)
+    #     gps_bgcolor = 'BEA60E'  # yellow BEA60E
+    else:  # < suspect (or fail if not using suspect range)
         gps_bgcolor = 'green'
 
     try:
