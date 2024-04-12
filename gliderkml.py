@@ -19,7 +19,7 @@ import requests
 import simplekml
 import yaml
 from jinja2 import Environment, FileSystemLoader
-from oceans.ocfis import uv2spdir, spdir2uv
+from oceans.ocfis import uv2spdir
 from magnetic_field_calculator import MagneticFieldCalculator
 pd.set_option('display.width', 320, "display.max_columns", 10)
 
@@ -272,32 +272,6 @@ def main(args):
                 sensor_df.loc[di, 'value'] = -result['field-value']['declination']['value']  # units = degrees
             sensor_data['m_gps_mag_var'] = sensor_df
 
-        # build the dictionary for the last surfacing information
-        ls_api = deployment_api['last_surfacing']
-        last_surfacing_popup_dict = build_popup_dict(ls_api)
-        ls_gps_lat_degrees = ls_api['gps_lat_degrees']
-        ls_gps_lon_degrees = ls_api['gps_lon_degrees']
-
-        # add values for battery and vacuum to the last surfacing information
-        for sensor in ['m_battery', 'm_vacuum']:
-            add_sensor_values(last_surfacing_popup_dict, sensor, sensor_data[sensor], thresholds=sensor_thresholds)
-
-        # add dive information (time, distance, speed)
-        last_surfacing_popup_dict['dive_time'] = int(np.round(ls_api['dive_time_seconds'] / 60))  # minutes
-        last_surfacing_popup_dict['dive_dist'] = np.round(ls_api['segment_distance_m'] / 1000, 2)  # km
-        last_surfacing_popup_dict['total_speed'] = None  # m/s
-        last_surfacing_popup_dict['total_speed_bearing'] = None
-        last_surfacing_popup_dict['current_speed'] = None  # m/s
-        last_surfacing_popup_dict['current_speed_bearing'] = None
-        last_surfacing_popup_dict['glide_speed'] = None  # m/s
-        last_surfacing_popup_dict['glide_speed_bearing'] = None
-
-        # current waypoint information
-        cwpt_lat = ls_api['waypoint_lat']
-        cwpt_lon = ls_api['waypoint_lon']
-        cwpt_lat_degress = convert_nmea_degrees(cwpt_lat)
-        cwpt_lon_degress = convert_nmea_degrees(cwpt_lon)
-
         # track information
         # gather track timestamp and location from the API
         track_dict = dict(
@@ -315,6 +289,7 @@ def main(args):
                 track_dict['sid'] = np.append(track_dict['sid'], tf['properties']['sid'])
 
         # add the last surfacing to the dictionary
+        ls_api = deployment_api['last_surfacing']
         track_dict['gps_epoch'] = np.append(track_dict['gps_epoch'], ls_api['connect_time_epoch'])
         track_dict['lon'] = np.append(track_dict['lon'], ls_api['gps_lon_degrees'])
         track_dict['lat'] = np.append(track_dict['lat'], ls_api['gps_lat_degrees'])
@@ -323,9 +298,6 @@ def main(args):
         # convert to dataframe to sort by time
         track_df = pd.DataFrame(track_dict)
         track_df.sort_values(by='gps_epoch', inplace=True, ignore_index=True)
-
-        # find the deployment id
-        deployment_sid = int(track_df.iloc[0]['sid'])
 
         if kml_type in ['deployed', 'deployed_uv']:
             track_df = track_df.copy()[['lon', 'lat']]
@@ -354,6 +326,8 @@ def main(args):
 
         # surface events
         surface_events = requests.get(f'{glider_api}surfacings/?deployment={deployment_name}').json()['data']
+        surface_events_df = pd.DataFrame(surface_events)
+        surface_events_df.sort_values(by='connect_time_epoch', inplace=True, ignore_index=True)
 
         # calculate previous 24 hours
         t24h = pd.to_datetime(ts_now) - pd.Timedelta(hours=24)
@@ -363,7 +337,9 @@ def main(args):
         call_length_seconds = 0
 
         # build the information for the surfacings and depth-averaged currents
-        for idx, se in enumerate(surface_events):
+        for idx, row in surface_events_df.iterrows():
+            se = row.to_dict()
+
             call_length_seconds = call_length_seconds + se['call_length_seconds']
             surface_event_popup = build_popup_dict(se)
 
@@ -462,29 +438,17 @@ def main(args):
             surface_events_dict[folder_name][idx]['surface_event_popup']['glide_speed'] = None  # m/s
             surface_events_dict[folder_name][idx]['surface_event_popup']['glide_speed_bearing'] = None
 
-            # find the deployment location surface record  ***** this doesn't match up with the current kmzs *****
-            if se['surfacing_id'] == deployment_sid:
-
-                # build the dictionary for the deployment information
-                deployment_popup_dict = build_popup_dict(se)
-                deployment_ts_Z = dt.datetime.fromtimestamp(se['connect_time_epoch'], dt.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
+            if idx == 0:  # deployment location
+                deployment_popup_dict = surface_events_dict[folder_name][idx]['surface_event_popup']
+                deployment_ts_Z = dt.datetime.fromtimestamp(se['connect_time_epoch'], dt.UTC).strftime(
+                    '%Y-%m-%dT%H:%M:%SZ')
                 deployment_gps_lat_degrees = se['gps_lat_degrees']
                 deployment_gps_lon_degrees = se['gps_lon_degrees']
 
-                # add values for battery and vacuum to deployment information popup
-                for sensor in ['m_battery', 'm_vacuum']:
-                    add_sensor_values(deployment_popup_dict, sensor, sensor_data[sensor], thresholds=sensor_thresholds)
-
-                # TODO calculate dive/speed information
-                # add dive information (time, distance, speed)
-                deployment_popup_dict['dive_time'] = None  # minutes
-                deployment_popup_dict['dive_dist'] = None  # km
-                deployment_popup_dict['total_speed'] = None  # m/s
-                deployment_popup_dict['total_speed_bearing'] = None
-                deployment_popup_dict['current_speed'] = current_speed  # m/s
-                deployment_popup_dict['current_speed_bearing'] = current_angle
-                deployment_popup_dict['glide_speed'] = None  # m/s
-                deployment_popup_dict['glide_speed_bearing'] = None
+            if idx == len(surface_events_df) - 1:  # last surfacing
+                last_surfacing_popup_dict = surface_events_dict[folder_name][idx]['surface_event_popup']
+                ls_gps_lat_degrees = se['gps_lat_degrees']
+                ls_gps_lon_degrees = se['gps_lon_degrees']
 
         deployment_dict[deployment_name] = dict(
             ts_now=ts_now,
@@ -500,10 +464,10 @@ def main(args):
             deploy_gps_lon_degrees=deployment_gps_lon_degrees,
             deployment_popup=deployment_popup_dict,
             cwpt_since=last_surfacing_popup_dict['disconnect_ts'],
-            cwpt_lat=cwpt_lat,
-            cwpt_lon=cwpt_lon,
-            cwpt_lat_degrees=cwpt_lat_degress,
-            cwpt_lon_degrees=cwpt_lon_degress,
+            cwpt_lat=ls_api['waypoint_lat'],
+            cwpt_lon=ls_api['waypoint_lon'],
+            cwpt_lat_degrees=convert_nmea_degrees(ls_api['waypoint_lat']),
+            cwpt_lon_degrees=convert_nmea_degrees(ls_api['waypoint_lon']),
             distance_flown_km=distance_flown_km,
             days_deployed=days_deployed,
             iridium_mins=int(np.round(call_length_seconds / 60)),
