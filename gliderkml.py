@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Author: lgarzio on 2/28/2024
-Last modified: lnazzaro on 4/6/2024
+Author: lgarzio and lnazzaro on 2/28/2024
+Last modified: lgarzio on 4/12/2024
 Test glider kmz generation
 """
 
@@ -111,21 +111,6 @@ def build_popup_dict(data):
     )
 
     return popup_dict
-
-
-def convert_glider_currents(u, v, mag):
-    # written by Mike Smith
-
-    # Convert to speed and direction
-    ang, spd = uv2spdir(u, v)
-
-    # Convert magnetic heading to true heading
-    true_heading = ang - mag
-
-    # Convert back to u and v
-    ul, vl = spdir2uv(spd, true_heading, deg=True)
-
-    return ul, vl
 
 
 def convert_nmea_degrees(x):
@@ -244,7 +229,7 @@ def main(args):
             deployment_color=colors[idx]
         )
 
-        # get distance flow and calculate days deployed
+        # get distance flown and calculate days deployed
         distance_flown_km = deployment_api['distance_flown_km']
         try:
             end = dt.datetime.fromtimestamp(deployment_api['end_date_epoch'], dt.UTC)
@@ -263,6 +248,9 @@ def main(args):
                 sensor_df = pd.DataFrame(sensor_api)
                 sensor_df.sort_values(by='epoch_seconds', inplace=True, ignore_index=True)
                 sensor_df['ts'] = pd.to_datetime(sensor_df['ts'])
+                if sensor == 'm_gps_mag_var':
+                    sensor_df['value'] = sensor_df['value'] * 180 / np.pi
+                    sensor_df['units'] = 'degrees'
                 sensor_data[sensor] = sensor_df
         
         # add m_gps_mag_var proxy if not being sent back
@@ -270,16 +258,18 @@ def main(args):
             calculator = MagneticFieldCalculator()
             sensor_df = sensor_data['m_water_vx'][['ts', 'epoch_seconds', 'lat', 'lon']].copy()
             sensor_df.insert(0, 'sensor', 'calculated_declination')
-            sensor_df.insert(1, 'units', 'rad')
+            # sensor_df.insert(1, 'units', 'rad')
+            sensor_df.insert(1, 'units', 'degrees')
             sensor_df.insert(2, 'value', np.nan)
             sensor_df['date'] = sensor_df['ts'].dt.date
             for d in np.unique(sensor_df['date']):
-                di = sensor_df['date']==d
+                di = sensor_df['date'] == d
                 result = calculator.calculate(latitude=np.nanmedian(sensor_df['lat'][di]),
                                 longitude=np.nanmedian(sensor_df['lon'][di]),
                                 altitude=0,
                                 date=d)
-                sensor_df.loc[di,'value'] = -result['field-value']['declination']['value']*np.pi/180
+                # sensor_df.loc[di,'value'] = -result['field-value']['declination']['value']*np.pi/180
+                sensor_df.loc[di, 'value'] = -result['field-value']['declination']['value']  # units = degrees
             sensor_data['m_gps_mag_var'] = sensor_df
 
         # build the dictionary for the last surfacing information
@@ -413,29 +403,36 @@ def main(args):
                 lat_degrees_start=se['gps_lat_degrees']
             )
 
-            # calculate depth-averaged currents  **************TO DO**************
-            # find the m_water_vx and m_water_vy for this surfacing
+            # calculate depth-averaged currents
+            # find m_water_vx, m_water_vy and m_gps_mag_var for this surfacing
             for sensor in ['m_water_vx', 'm_water_vy', 'm_gps_mag_var']:
-                try:
-                    sensor_data[sensor]
-                except KeyError:
-                    print('figure out what to do when m_gps_mag_var is missing')  # see Joe's email
+                add_sensor_values(currents_dict[currents_folder_name][idx], sensor, sensor_data[sensor])
 
-                add_sensor_values(currents_dict[folder_name][idx], sensor, sensor_data[sensor])
+            # rotate from magnetic plane to true plane and calculate current speed and angle
+            surfacing_m_water_vx = currents_dict[currents_folder_name][idx]['m_water_vx']
+            surfacing_m_water_vy = currents_dict[currents_folder_name][idx]['m_water_vy']
+            surfacing_m_gps_mag_var = currents_dict[currents_folder_name][idx]['m_gps_mag_var']
 
-            # rotate from magnetic plane to true plane
-            u, v = convert_glider_currents(currents_dict[folder_name][idx]['m_water_vx'],
-                                           currents_dict[folder_name][idx]['m_water_vy'],
-                                           currents_dict[folder_name][idx]['m_gps_mag_var'])
+            if np.logical_and(np.logical_and(surfacing_m_water_vx, surfacing_m_water_vy), surfacing_m_gps_mag_var):
+                # units: current_angle = degrees, current_speed = m/s
+                current_angle, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy,
+                                                        mag=-surfacing_m_gps_mag_var)
+            elif np.logical_and(surfacing_m_water_vx, surfacing_m_water_vy):
+                # calculate m_gps_mag_var if it's not there
+                calculator = MagneticFieldCalculator()
+                result = calculator.calculate(latitude=se['gps_lat_degrees'],
+                                              longitude=se['gps_lon_degrees'],
+                                              altitude=0,
+                                              date=currents_folder_name)
+                mag = -result['field-value']['declination']['value']
+                current_angle, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy, mag=-mag)
+            else:
+                current_angle = None
+                current_speed = None
 
-            angle, speed = uv2spdir(u, v)
-
+            # TODO: calculate where the glider will be in 1 day floating at surface and replace lon_deg_end and lat_deg_end with that
             lon_deg_end = se['gps_lon_degrees'] - .05  # these are placeholders
             lat_deg_end = se['gps_lat_degrees'] - .05  # these are placeholders
-
-            # TODO: finish the currents piece
-            # TODO: add current info to the popup
-            # TODO: calculate where the glider will be in 1 day floating at surface and replace lon_deg_end and lat_deg_end with that
 
             currents_dict[currents_folder_name][idx]['lon_degrees_end'] = lon_deg_end
             currents_dict[currents_folder_name][idx]['lat_degrees_end'] = lat_deg_end
@@ -454,13 +451,14 @@ def main(args):
                 add_sensor_values(surface_events_dict[folder_name][idx]['surface_event_popup'],
                                   sensor, sensor_data[sensor], thresholds=sensor_thresholds)
 
-            # add dive information to the surfacing event (time, distance, speed)
+            # TODO calculate dive/speed information
+            # add dive and current information to the surfacing event (time, distance, speed)
             surface_events_dict[folder_name][idx]['surface_event_popup']['dive_time'] = None  # minutes
             surface_events_dict[folder_name][idx]['surface_event_popup']['dive_dist'] = None  # km
             surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed'] = None  # m/s
             surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed_bearing'] = None
-            surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed'] = None  # m/s
-            surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed_bearing'] = None
+            surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed'] = current_speed  # m/s
+            surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed_bearing'] = current_angle
             surface_events_dict[folder_name][idx]['surface_event_popup']['glide_speed'] = None  # m/s
             surface_events_dict[folder_name][idx]['surface_event_popup']['glide_speed_bearing'] = None
 
@@ -469,8 +467,7 @@ def main(args):
 
                 # build the dictionary for the deployment information
                 deployment_popup_dict = build_popup_dict(se)
-                deployment_ts_Z = dt.datetime.fromtimestamp(se['connect_time_epoch'], dt.UTC).strftime(
-                    '%Y-%m-%dT%H:%M:%SZ')
+                deployment_ts_Z = dt.datetime.fromtimestamp(se['connect_time_epoch'], dt.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
                 deployment_gps_lat_degrees = se['gps_lat_degrees']
                 deployment_gps_lon_degrees = se['gps_lon_degrees']
 
@@ -478,13 +475,14 @@ def main(args):
                 for sensor in ['m_battery', 'm_vacuum']:
                     add_sensor_values(deployment_popup_dict, sensor, sensor_data[sensor], thresholds=sensor_thresholds)
 
+                # TODO calculate dive/speed information
                 # add dive information (time, distance, speed)
                 deployment_popup_dict['dive_time'] = None  # minutes
                 deployment_popup_dict['dive_dist'] = None  # km
                 deployment_popup_dict['total_speed'] = None  # m/s
                 deployment_popup_dict['total_speed_bearing'] = None
-                deployment_popup_dict['current_speed'] = None  # m/s
-                deployment_popup_dict['current_speed_bearing'] = None
+                deployment_popup_dict['current_speed'] = current_speed  # m/s
+                deployment_popup_dict['current_speed_bearing'] = current_angle
                 deployment_popup_dict['glide_speed'] = None  # m/s
                 deployment_popup_dict['glide_speed_bearing'] = None
 
