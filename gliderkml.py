@@ -255,7 +255,7 @@ def main(args):
         
         # add m_gps_mag_var proxy if not being sent back
         if 'm_water_vx' in sensor_data.keys() and 'm_water_vy' in sensor_data.keys() and 'm_gps_mag_var' not in sensor_data.keys():
-            calculator = MagneticFieldCalculator()
+            calculator = MagneticFieldCalculator(model='igrf')
             sensor_df = sensor_data['m_water_vx'][['ts', 'epoch_seconds', 'lat', 'lon']].copy()
             sensor_df.insert(0, 'sensor', 'calculated_declination')
             # sensor_df.insert(1, 'units', 'rad')
@@ -395,7 +395,7 @@ def main(args):
                                                         mag=-surfacing_m_gps_mag_var)
             elif np.logical_and(surfacing_m_water_vx, surfacing_m_water_vy):
                 # calculate m_gps_mag_var if it's not there
-                calculator = MagneticFieldCalculator()
+                calculator = MagneticFieldCalculator(model='igrf')
                 result = calculator.calculate(latitude=se['gps_lat_degrees'],
                                               longitude=se['gps_lon_degrees'],
                                               altitude=0,
