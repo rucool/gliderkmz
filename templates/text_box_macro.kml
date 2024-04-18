@@ -16,28 +16,44 @@
 <tr>
 <th width="200" align="right">GPS Acquired:</th><td bgcolor={{ data['gps_bgcolor'] }} width=200><font color="white">{{ data['gps_connect_ts'] }} GMT</font></td>
 </tr>
+{%- if data['reason'] -%}
 <tr>
 <th width="200" align="right">Reason:</th><td width="200">{{ data['reason'] }}</td></tr>
+{%- endif -%}
+{%- if data['mission'] -%}
 <tr>
 <th width="200" align="right">Mission:</th><td width="200">{{ data['mission'] }}</td></tr>
+{%- endif -%}
+{%- if data['filename'] -%}
 <tr>
 <th width="200" align="right">Filename:</th><td width="200">{{ data['filename'] }}</td></tr>
+{%- endif -%}
+{%- if data['filename_8x3'] -%}
 <tr>
 <th width="200" align="right">8.3 Filename:</th><td width="200">{{ data['filename_8x3'] }}</td></tr>
+{%- endif -%}
+{%- if data['dsvr_log'] -%}
 <tr>
 <th width="200" align="right">DSVR Log:</th><td width="200">{{ data['dsvr_log'] }}</td></tr>
+{%- endif -%}
+{%- if data['segment_ewo'] -%}
 <tr>
 <th width="200" align="right">Segment E/W/O:</th>
 <td width="200">{{ data['segment_ewo'] }}</td>
 </tr>
+{%- endif -%}
+{%- if data['mission_ewo'] -%}
 <tr>
 <th width="200" align="right">Mission E/W/O:</th>
 <td width="200">{{ data['mission_ewo'] }}</td>
 </tr>
+{%- endif -%}
+{%- if data['total_ewo'] -%}
 <tr>
 <th width="200" align="right">Total E/W/O:</th>
 <td width="200">{{ data['total_ewo'] }}</td>
 </tr>
+{%- endif -%}
 <tr>
 <th width="200" align="right">Battery:</th>
 <td width="200" bgcolor={{ data['m_battery_bgcolor'] }}><font color="white">{{ data['m_battery'] }} Volts</font></td>
