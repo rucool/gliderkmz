@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lgarzio on 4/12/2024
+Last modified: lgarzio on 4/17/2024
 Test glider kmz generation
 """
 
@@ -18,8 +18,10 @@ import numpy as np
 import requests
 import simplekml
 import yaml
+import geopy.distance
+import math
 from jinja2 import Environment, FileSystemLoader
-from oceans.ocfis import uv2spdir
+from oceans.ocfis import uv2spdir, spdir2uv
 from magnetic_field_calculator import MagneticFieldCalculator
 pd.set_option('display.width', 320, "display.max_columns", 10)
 
@@ -39,11 +41,11 @@ def add_sensor_values(data_dict, sensor_name, sdf, thresholds=None):
 
     cts = pd.to_datetime(data_dict['connect_ts'])
     dcts = pd.to_datetime(data_dict['disconnect_ts'])
-    t0 = cts - pd.Timedelta(minutes=5)
-    t1 = dcts + pd.Timedelta(minutes=5)
+    t0 = cts - pd.Timedelta(minutes=15)
+    t1 = dcts + pd.Timedelta(minutes=15)
 
     try:
-        sensor_value = np.round(np.median(sdf.loc[np.logical_and(sdf.ts >= t0, sdf.ts <= t1)].value), 2)
+        sensor_value = format_float(np.median(sdf.loc[np.logical_and(sdf.ts >= t0, sdf.ts <= t1)].value))
         if np.isnan(sensor_value):
             sensor_value = None
             bgcolor = 'BEA60E'  # yellow BEA60E
@@ -84,6 +86,10 @@ def build_popup_dict(data):
     else:  # < suspect (or fail if not using suspect range)
         gps_bgcolor = 'green'
 
+    segment_ewo = f"{format_int(data['segment_errors'])}/{format_int(data['segment_warnings'])}/{format_int(data['segment_oddities'])}"
+    mission_ewo = f"{format_int(data['mission_errors'])}/{format_int(data['mission_warnings'])}/{format_int(data['mission_oddities'])}"
+    total_ewo = f"{format_int(data['total_errors'])}/{format_int(data['total_warnings'])}/{format_int(data['total_oddities'])}"
+
     try:
         waypoint_range_km = data['waypoint_range_meters'] / 1000
     except TypeError:
@@ -92,8 +98,8 @@ def build_popup_dict(data):
     popup_dict = dict(
         connect_ts=connect_ts,
         disconnect_ts=disconnect_ts,
-        gps_lat=np.round(convert_nmea_degrees(data['gps_lat']), 2),
-        gps_lon=np.round(convert_nmea_degrees(data['gps_lon']), 2),
+        gps_lat=format_float(convert_nmea_degrees(data['gps_lat'])),
+        gps_lon=format_float(convert_nmea_degrees(data['gps_lon'])),
         gps_connect_ts=gps_connect_ts,
         gps_bgcolor=gps_bgcolor,
         reason=data['surface_reason'],
@@ -101,16 +107,56 @@ def build_popup_dict(data):
         filename=data['filename'],
         filename_8x3=data['the8x3_filename'],
         dsvr_log=data['dsvr_log_name'],
-        segment_ewo=f"{data['segment_errors']}/{data['segment_warnings']}/{data['segment_oddities']}",
-        mission_ewo=f"{data['mission_errors']}/{data['mission_warnings']}/{data['mission_oddities']}",
-        total_ewo=f"{data['total_errors']}/{data['total_warnings']}/{data['total_oddities']}",
-        waypoint_lat=data['waypoint_lat'],
-        waypoint_lon=data['waypoint_lon'],
-        waypoint_range=waypoint_range_km,
-        waypoint_bearing=data['waypoint_bearing_degrees']
+        segment_ewo=format_ewo(segment_ewo),
+        mission_ewo=format_ewo(mission_ewo),
+        total_ewo=format_ewo(total_ewo),
+        waypoint_lat=format_float(convert_nmea_degrees(data['waypoint_lat'])),
+        waypoint_lon=format_float(convert_nmea_degrees(data['waypoint_lon'])),
+        waypoint_range=format_float(waypoint_range_km),
+        waypoint_bearing=format_int(data['waypoint_bearing_degrees'])
     )
 
     return popup_dict
+
+
+def calculate_compass_bearing(pointA, pointB):
+    """
+    Calculates the bearing between two points.
+    From https://gist.github.com/jeromer/2005586?permalink_comment_id=4669453 and
+    https://towardsdatascience.com/calculating-the-bearing-between-two-geospatial-coordinates-66203f57e4b4
+    The formulae used is the following:
+        θ = atan2(sin(Δlong).cos(lat2),
+                  cos(lat1).sin(lat2) − sin(lat1).cos(lat2).cos(Δlong))
+    :Parameters:
+      - `pointA: The tuple representing the latitude/longitude for the
+        first point. Latitude and longitude must be in decimal degrees
+      - `pointB: The tuple representing the latitude/longitude for the
+        second point. Latitude and longitude must be in decimal degrees
+    :Returns:
+      The bearing in degrees
+    :Returns Type:
+      float
+    """
+    if (type(pointA) != tuple) or (type(pointB) != tuple):
+        raise TypeError("Only tuples are supported as arguments")
+
+    lat1 = math.radians(pointA[0])
+    lat2 = math.radians(pointB[0])
+
+    diffLong = math.radians(pointB[1] - pointA[1])
+
+    x = math.sin(diffLong) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1) * math.cos(lat2) * math.cos(diffLong))
+
+    initial_bearing = math.atan2(x, y)
+
+    # Now we have the initial bearing but math.atan2 return values
+    # from -180° to + 180° which is not what we want for a compass bearing
+    # The solution is to normalize the initial bearing as shown below
+    initial_bearing = math.degrees(initial_bearing)
+    compass_bearing = (initial_bearing + 360) % 360
+
+    return compass_bearing
 
 
 def convert_nmea_degrees(x):
@@ -123,6 +169,32 @@ def convert_nmea_degrees(x):
         degrees = None
 
     return degrees
+
+
+def format_ewo(ewo):
+    if ewo == 'None/None/None':
+        ewo = None
+
+    return ewo
+
+
+def format_float(value):
+    # round float values to 2 decimal places
+    try:
+        value = np.round(value, 2)
+    except (ValueError, TypeError):
+        value = value
+
+    return value
+
+
+def format_int(value):
+    try:
+        value = int(value)
+    except (ValueError, TypeError):
+        value = value
+
+    return value
 
 
 def format_ts_epoch(timestamp):
@@ -237,7 +309,7 @@ def main(args):
             end = dt.datetime.now(dt.UTC)
         start = dt.datetime.fromtimestamp(deployment_api['start_date_epoch'], dt.UTC)
         seconds_deployed = ((end - start).days * 86400) + (end - start).seconds
-        days_deployed = np.round(seconds_deployed / 86400, 2)
+        days_deployed = format_float(seconds_deployed / 86400)
 
         # grab the data from the surface sensors and store in a dictionary (so you only have to hit the API once
         # per sensor per deployment)
@@ -328,6 +400,7 @@ def main(args):
         surface_events = requests.get(f'{glider_api}surfacings/?deployment={deployment_name}').json()['data']
         surface_events_df = pd.DataFrame(surface_events)
         surface_events_df.sort_values(by='connect_time_epoch', inplace=True, ignore_index=True)
+        surface_events_df = surface_events_df.replace({np.nan: None})
 
         # calculate previous 24 hours
         t24h = pd.to_datetime(ts_now) - pd.Timedelta(hours=24)
@@ -389,11 +462,14 @@ def main(args):
             surfacing_m_water_vy = currents_dict[currents_folder_name][idx]['m_water_vy']
             surfacing_m_gps_mag_var = currents_dict[currents_folder_name][idx]['m_gps_mag_var']
 
-            if np.logical_and(np.logical_and(surfacing_m_water_vx, surfacing_m_water_vy), surfacing_m_gps_mag_var):
-                # units: current_angle = degrees, current_speed = m/s
-                current_angle, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy,
-                                                        mag=-surfacing_m_gps_mag_var)
-            elif np.logical_and(surfacing_m_water_vx, surfacing_m_water_vy):
+            vx_test = isinstance(surfacing_m_water_vx, float)
+            vy_test = isinstance(surfacing_m_water_vy, float)
+            mag_test = isinstance(surfacing_m_gps_mag_var, float)
+            if np.logical_and(np.logical_and(vx_test, vy_test), mag_test):
+                # units: current_bearing = degrees, current_speed = m/s
+                current_bearing, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy,
+                                                          mag=-surfacing_m_gps_mag_var)
+            elif np.logical_and(vx_test, vy_test):
                 # calculate m_gps_mag_var if it's not there
                 calculator = MagneticFieldCalculator(model='igrf')
                 result = calculator.calculate(latitude=se['gps_lat_degrees'],
@@ -401,17 +477,20 @@ def main(args):
                                               altitude=0,
                                               date=currents_folder_name)
                 mag = -result['field-value']['declination']['value']
-                current_angle, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy, mag=-mag)
+                current_bearing, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy, mag=-mag)
             else:
-                current_angle = None
+                current_bearing = None
                 current_speed = None
 
-            # TODO: calculate where the glider will be in 1 day floating at surface and replace lon_deg_end and lat_deg_end with that
-            lon_deg_end = se['gps_lon_degrees'] - .05  # these are placeholders
-            lat_deg_end = se['gps_lat_degrees'] - .05  # these are placeholders
-
-            currents_dict[currents_folder_name][idx]['lon_degrees_end'] = lon_deg_end
-            currents_dict[currents_folder_name][idx]['lat_degrees_end'] = lat_deg_end
+            # calculate where the glider will be in 1 day floating at surface
+            try:
+                distance_1day_km = current_speed * 86400 / 1000
+                dest_1day = geopy.distance.distance(kilometers=distance_1day_km).destination((se['gps_lat_degrees'], se['gps_lon_degrees']), bearing=current_bearing)
+                currents_dict[currents_folder_name][idx]['lon_degrees_end'] = dest_1day.longitude
+                currents_dict[currents_folder_name][idx]['lat_degrees_end'] = dest_1day.latitude
+            except TypeError:
+                # if end lat/lon can't be calculated, remove this record from the currents dictionary
+                del currents_dict[currents_folder_name][idx]
 
             surface_events_dict[folder_name][idx] = dict(
                 connect_ts=surface_event_popup['connect_ts'],
@@ -427,28 +506,58 @@ def main(args):
                 add_sensor_values(surface_events_dict[folder_name][idx]['surface_event_popup'],
                                   sensor, sensor_data[sensor], thresholds=sensor_thresholds)
 
-            # TODO calculate dive/speed information
-            # add dive and current information to the surfacing event (time, distance, speed)
-            surface_events_dict[folder_name][idx]['surface_event_popup']['dive_time'] = None  # minutes
-            surface_events_dict[folder_name][idx]['surface_event_popup']['dive_dist'] = None  # km
-            surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed'] = None  # m/s
-            surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed_bearing'] = None
-            surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed'] = current_speed  # m/s
-            surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed_bearing'] = current_angle
-            surface_events_dict[folder_name][idx]['surface_event_popup']['glide_speed'] = None  # m/s
-            surface_events_dict[folder_name][idx]['surface_event_popup']['glide_speed_bearing'] = None
+            # TODO calculate drift time??
 
             if idx == 0:  # deployment location
+                surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed'] = format_float(current_speed)  # m/s
+                surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed_bearing'] = format_int(current_bearing)
+
                 deployment_popup_dict = surface_events_dict[folder_name][idx]['surface_event_popup']
                 deployment_ts_Z = dt.datetime.fromtimestamp(se['connect_time_epoch'], dt.UTC).strftime(
                     '%Y-%m-%dT%H:%M:%SZ')
                 deployment_gps_lat_degrees = se['gps_lat_degrees']
                 deployment_gps_lon_degrees = se['gps_lon_degrees']
 
-            if idx == len(surface_events_df) - 1:  # last surfacing
-                last_surfacing_popup_dict = surface_events_dict[folder_name][idx]['surface_event_popup']
-                ls_gps_lat_degrees = se['gps_lat_degrees']
-                ls_gps_lon_degrees = se['gps_lon_degrees']
+            else:
+                # calculate dive/speed from previous surfacing info
+                prev_row = surface_events_df.iloc[idx - 1].to_dict()
+
+                # calculate dive time and distance
+                dive_time_seconds = se['connect_time_epoch'] - prev_row['disconnect_time_epoch']
+                dive_time_minutes = format_float(dive_time_seconds / 60)
+
+                dive_distance = format_float(geopy.distance.geodesic((prev_row['gps_lat_degrees'], prev_row['gps_lon_degrees']),
+                                                                     (se['gps_lat_degrees'], se['gps_lon_degrees'])).km)
+
+                # calculate total speed and bearing
+                total_speed = dive_distance * 1000 / dive_time_seconds
+
+                total_bearing = calculate_compass_bearing((prev_row['gps_lat_degrees'], prev_row['gps_lon_degrees']),
+                                                          (se['gps_lat_degrees'], se['gps_lon_degrees']))
+
+                # calculate glide speed and bearing
+                try:
+                    cu, cv = spdir2uv(current_speed, current_bearing, deg=True)
+                    tu, tv = spdir2uv(total_speed, total_bearing, deg=True)
+                    glide_bearing, glide_speed = uv2spdir(tu - cu, tv - cv)
+                except TypeError:
+                    glide_bearing = None
+                    glide_speed = None
+
+                # add dive and current information to the surfacing event (time, distance, speed)
+                surface_events_dict[folder_name][idx]['surface_event_popup']['dive_time'] = dive_time_minutes  # minutes
+                surface_events_dict[folder_name][idx]['surface_event_popup']['dive_dist'] = dive_distance  # km
+                surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed'] = format_float(total_speed)  # m/s
+                surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed_bearing'] = format_int(total_bearing)
+                surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed'] = format_float(current_speed)  # m/s
+                surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed_bearing'] = format_int(current_bearing)
+                surface_events_dict[folder_name][idx]['surface_event_popup']['glide_speed'] = format_float(glide_speed)  # m/s
+                surface_events_dict[folder_name][idx]['surface_event_popup']['glide_speed_bearing'] = format_int(glide_bearing)
+
+                if idx == len(surface_events_df) - 1:  # last surfacing
+                    last_surfacing_popup_dict = surface_events_dict[folder_name][idx]['surface_event_popup']
+                    ls_gps_lat_degrees = se['gps_lat_degrees']
+                    ls_gps_lon_degrees = se['gps_lon_degrees']
 
         deployment_dict[deployment_name] = dict(
             ts_now=ts_now,
@@ -470,7 +579,7 @@ def main(args):
             cwpt_lon_degrees=convert_nmea_degrees(ls_api['waypoint_lon']),
             distance_flown_km=distance_flown_km,
             days_deployed=days_deployed,
-            iridium_mins=int(np.round(call_length_seconds / 60)),
+            iridium_mins=format_int(np.round(call_length_seconds / 60)),
             track_info=track_data,
             surface_event_info=surface_events_dict,
             currents_info=currents_dict
