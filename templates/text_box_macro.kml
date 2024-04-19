@@ -71,10 +71,22 @@
 <td width="200">{{ data['dive_time'] }} minutes</td>
 </tr>
 {%- endif -%}
+{%- if data['drift_time'] -%}
+<tr>
+<th width="200" align="right">Drift Time: </th>
+<td width="200">{{ data['drift_time'] }} minutes</td>
+</tr>
+{%- endif -%}
 {%- if data['dive_dist'] -%}
 <tr>
 <th width="200" align="right">Dive Distance: </th>
 <td width="200">{{ data['dive_dist'] }} km</td>
+</tr>
+{%- endif -%}
+{%- if data['drift_dist'] -%}
+<tr>
+<th width="200" align="right">Drift Distance: </th>
+<td width="200">{{ data['drift_dist'] }} km</td>
 </tr>
 {%- endif -%}
 {%- if data['total_speed'] -%}

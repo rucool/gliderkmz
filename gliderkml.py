@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lgarzio on 4/17/2024
+Last modified: lgarzio on 4/19/2024
 Test glider kmz generation
 """
 
@@ -224,9 +224,9 @@ def main(args):
     # NOTE: kml colors are encoded backwards from the HTML convention. HTML colors are "#rrggbbaa": Red Green Blue
     # Alpha, while KML colors are "AABBGGRR": Alpha Blue Green Red.
 
-    # teal ('ffe9d043'), pink ('ff9e36d7'), purple ('ffd7369e'), yellow ('ff43d0e9'), orange ('ff3877f3'),
+    # teal ('ffe9d043'), purple ('ffd7369e'), yellow ('ff43d0e9'), pink ('ff9e36d7'), orange ('ff3877f3'),
     # green ('ff83c995'), gray ('ffc4c9d8')
-    colors = ['ffe9d043', 'ff9e36d7', 'ffd7369e', 'ff43d0e9', 'ff3877f3', 'ff83c995', 'ffc4c9d8']
+    colors = ['ffe9d043', 'ffd7369e', 'ff43d0e9', 'ff9e36d7', 'ff3877f3', 'ff83c995', 'ffc4c9d8']
 
     # load the templates
     environment = Environment(loader=FileSystemLoader(templatedir))
@@ -288,7 +288,7 @@ def main(args):
 
     format_dict = dict()
     deployment_dict = dict()
-    for idx, gd in enumerate(glider_deployments):
+    for glider_idx, gd in enumerate(glider_deployments):
         deployment_api = requests.get(f'{glider_api}deployments/?deployment={gd}').json()['data'][0]
 
         # build the dictionary for the formatting section of the kml
@@ -298,7 +298,7 @@ def main(args):
         format_dict[deployment_name] = dict(
             name=glider_name,
             glider_tail=glider_tail,
-            deployment_color=colors[idx]
+            deployment_color=colors[glider_idx]
         )
 
         # get distance flown and calculate days deployed
@@ -382,12 +382,12 @@ def main(args):
         elif kml_type in ['deployed_ts', 'deployed_ts_uv']:
             # build the dictionary that contains the track information to input into the kml template
             track_data = dict()
-            for idx, row in track_df.iterrows():
-                if idx > 0:
-                    prev_row = track_df.iloc[idx - 1]
+            for track_idx, row in track_df.iterrows():
+                if track_idx > 0:
+                    prev_row = track_df.iloc[track_idx - 1]
                     start = dt.datetime.fromtimestamp(prev_row.gps_epoch, dt.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
                     end = dt.datetime.fromtimestamp(row.gps_epoch, dt.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
-                    track_data[idx] = dict(
+                    track_data[track_idx] = dict(
                         start=start,
                         end=end,
                         start_lon=prev_row.lon,
@@ -407,13 +407,13 @@ def main(args):
 
         surface_events_dict = dict()
         currents_dict = dict()
-        call_length_seconds = 0
+        total_iridium_seconds = 0
 
         # build the information for the surfacings and depth-averaged currents
         for idx, row in surface_events_df.iterrows():
             se = row.to_dict()
 
-            call_length_seconds = call_length_seconds + se['call_length_seconds']
+            total_iridium_seconds = total_iridium_seconds + se['call_length_seconds']
             surface_event_popup = build_popup_dict(se)
 
             # define surfacing grouping (e.g. last 24 hours or day)
@@ -522,12 +522,14 @@ def main(args):
                 # calculate dive/speed from previous surfacing info
                 prev_row = surface_events_df.iloc[idx - 1].to_dict()
 
-                # calculate dive time and distance
+                # calculate dive/drift time and distance
                 dive_time_seconds = se['connect_time_epoch'] - prev_row['disconnect_time_epoch']
                 dive_time_minutes = format_float(dive_time_seconds / 60)
 
                 dive_distance = format_float(geopy.distance.geodesic((prev_row['gps_lat_degrees'], prev_row['gps_lon_degrees']),
                                                                      (se['gps_lat_degrees'], se['gps_lon_degrees'])).km)
+                drift_time_minutes = None
+                drift_distance = None
 
                 # calculate total speed and bearing
                 total_speed = dive_distance * 1000 / dive_time_seconds
@@ -544,9 +546,19 @@ def main(args):
                     glide_bearing = None
                     glide_speed = None
 
+                # if the call length is very short, the glider is likely drifting at the surface
+                # TODO there has to be a better way to do this. when a glider is in shipping lanes they keep calls very short
+                if se['call_length_seconds'] < 60:
+                    drift_time_minutes = dive_time_minutes
+                    drift_distance = dive_distance
+                    dive_time_minutes = None
+                    dive_distance = None
+
                 # add dive and current information to the surfacing event (time, distance, speed)
                 surface_events_dict[folder_name][idx]['surface_event_popup']['dive_time'] = dive_time_minutes  # minutes
                 surface_events_dict[folder_name][idx]['surface_event_popup']['dive_dist'] = dive_distance  # km
+                surface_events_dict[folder_name][idx]['surface_event_popup']['drift_time'] = drift_time_minutes  # minutes
+                surface_events_dict[folder_name][idx]['surface_event_popup']['drift_dist'] = drift_distance  # km
                 surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed'] = format_float(total_speed)  # m/s
                 surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed_bearing'] = format_int(total_bearing)
                 surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed'] = format_float(current_speed)  # m/s
@@ -579,7 +591,7 @@ def main(args):
             cwpt_lon_degrees=convert_nmea_degrees(ls_api['waypoint_lon']),
             distance_flown_km=distance_flown_km,
             days_deployed=days_deployed,
-            iridium_mins=format_int(np.round(call_length_seconds / 60)),
+            iridium_mins=format_int(np.round(total_iridium_seconds / 60)),
             track_info=track_data,
             surface_event_info=surface_events_dict,
             currents_info=currents_dict
