@@ -215,17 +215,16 @@ def main(args):
     loglevel = args.loglevel.upper()  # TODO do something with logging?
     deployment = args.deployment
     kml_type = args.kml_type
+    savedir = args.savedir
 
     sensor_list = ['m_battery', 'm_vacuum', 'm_water_vx', 'm_water_vy', 'm_gps_mag_var']
 
-    sensor_thresholds_yml = '/Users/garzio/Documents/repo/lgarzio/gliderkmz/configs/sensor_thresholds.yml'
+    kmz_repo = '/home/glideradm/code/kmz/gliderkmz'
+    sensor_thresholds_yml = os.path.join(kmz_repo, 'configs/sensor_thresholds.yml')
     with open(sensor_thresholds_yml) as f:
         sensor_thresholds = yaml.safe_load(f)
 
-    templatedir = '/Users/garzio/Documents/repo/rucool/gliderkmz/templates/'
-
-    savedir = '/Users/garzio/Documents/repo/rucool/gliderkmz/files/'
-    # savedir = '/www/web/rucool/gliders/kmz'
+    templatedir = os.path.join(kmz_repo, 'templates/')
 
     glider_tails = 'https://rucool.marine.rutgers.edu/gliders/glider_tails/'  # /www/web/rucool/gliders/glider_tails
     # old glider tails location: https://marine.rutgers.edu/~kerfoot/icons/glider_tails/
@@ -638,6 +637,11 @@ if __name__ == '__main__':
                                  'vectors of depth-averaged currents.',
                             choices=['deployed', 'deployed_ts', 'deployed_uv', 'deployed_ts_uv'],
                             default='deployed')
+
+    arg_parser.add_argument('-s', '--savedir',
+                            type=str,
+                            help='Save directory',
+                            default='/www/web/rucool/gliders/kmz')  # https://rucool.marine.rutgers.edu/gliders/kmz/
 
     arg_parser.add_argument('-l', '--loglevel',
                             help='Verbosity level',
