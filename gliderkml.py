@@ -2,13 +2,14 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lgarzio on 4/19/2024
+Last modified: lgarzio on 4/23/2024
 Test glider kmz generation
 """
 
 import os
 import argparse
 import sys
+import zipfile
 import re
 import pytz
 from dateutil import parser
@@ -157,6 +158,15 @@ def calculate_compass_bearing(pointA, pointB):
     compass_bearing = (initial_bearing + 360) % 360
 
     return compass_bearing
+
+
+def convert_kml_to_kmz(kml_file_path, kmz_file_path=None):
+    if kmz_file_path is None:
+        kmz_file_path = f'{os.path.splitext(kml_file_path)[0]}.kmz'
+    with zipfile.ZipFile(kmz_file_path, 'w', zipfile.ZIP_DEFLATED) as kmz:
+        # Define the arcname to be ‘doc.kml’ as per KMZ file specification
+        kmz.write(kml_file_path, arcname='doc.kml')
+    return kmz_file_path
 
 
 def convert_nmea_degrees(x):
@@ -607,6 +617,12 @@ def main(args):
 
     with open(savefile, mode="w", encoding="utf-8") as message:
         message.write(content)
+
+    kmz_filename = convert_kml_to_kmz(savefile, kmz_file_path=None)
+
+    # remove the kml file if the kmz file was written
+    if os.path.isfile(kmz_filename):
+        os.remove(savefile)
 
 
 if __name__ == '__main__':
