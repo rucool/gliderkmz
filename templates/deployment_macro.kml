@@ -57,7 +57,7 @@
 {{ data['iridium_mins'] }} Iridium minutes</Snippet>
 	{{ track_macro.track_snippet(data['glider_name'], kml_type, data['track_info']) }}
 	</Placemark>
-	{% elif kml_type in ('deployed_ts', 'deployed_ts_uv') -%}
+	{% elif kml_type in ('deployed_ts', 'deployed_uv_ts') -%}
 	<Folder id="track">
 		<name>Track</name>
 		<Snippet maxLines="3">{{ data['distance_flown_km'] }} km flown
@@ -70,7 +70,7 @@
 		<name>Surface Events</name>
 		{{ surface_event_macro.surfacing(data['glider_name'], data['glider_tail'], kml_type, data['surface_event_info']) }}
 	</Folder>
-	{% if kml_type in ('deployed_uv', 'deployed_ts_uv') -%}
+	{% if kml_type in ('deployed_uv', 'deployed_uv_ts') -%}
 	<Folder id="1_driftDays">
 		<name>Depth-Averaged Currents</name>
 		<Snippet maxLines="2">1 Days Drift</Snippet>

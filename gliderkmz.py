@@ -257,7 +257,7 @@ def main(args):
     glider_api = 'https://marine.rutgers.edu/cool/data/gliders/api/'
 
     glider_deployments = []
-    if deployment == 'active':  # 'deployed' 'deployed_ts' 'deployed_uv' 'deployed_ts_uv'
+    if deployment == 'active':  # 'deployed' 'deployed_ts' 'deployed_uv' 'deployed_uv_ts'
         savefile = os.path.join(savedir, f'active_deployments{ext}.kml')
         document_name = 'Active Deployments'
         active_deployments = requests.get(f'{glider_api}deployments/?active').json()['data']
@@ -386,7 +386,7 @@ def main(args):
             track_data = kml.newlinestring(name="track")
             for values in track_values:
                 track_data.coords.addcoordinates([(values[0], values[1], values[2])])
-        elif kml_type in ['deployed_ts', 'deployed_ts_uv']:
+        elif kml_type in ['deployed_ts', 'deployed_uv_ts']:
             # build the dictionary that contains the track information to input into the kml template
             track_data = dict()
             for track_idx, row in track_df.iterrows():
@@ -634,9 +634,9 @@ if __name__ == '__main__':
                             type=str,
                             help='Type to generate. "deployed": glider track with surfacings, "deployed_ts": same as'
                                  'deployed with the option to filter by time, "deployed_uv": same as deployed with '
-                                 'vectors of depth-averaged currents, and "deployed_ts_uv": same as deployed_ts with'
+                                 'vectors of depth-averaged currents, and "deployed_uv_ts": same as deployed_ts with'
                                  'vectors of depth-averaged currents.',
-                            choices=['deployed', 'deployed_ts', 'deployed_uv', 'deployed_ts_uv'],
+                            choices=['deployed', 'deployed_ts', 'deployed_uv', 'deployed_uv_ts'],
                             default='deployed')
 
     arg_parser.add_argument('-s', '--savedir',

@@ -7,7 +7,7 @@
 				{{ track_info.coords }}
 			</coordinates>
 		</LineString>
-	{% elif kml_type in ('deployed_ts', 'deployed_ts_uv') -%}
+	{% elif kml_type in ('deployed_ts', 'deployed_uv_ts') -%}
 	{% for idx, data in track_info.items() -%}
 		<Placemark>
 			<name>Segment</name>

@@ -5,7 +5,7 @@
 		{% for idx, data in info.items() -%}
 			<Placemark>
 				<name>{{ data['connect_HHMM'] }} GMT</name>
-				{% if kml_type == 'deployed_ts_uv' -%}
+				{% if kml_type == 'deployed_uv_ts' -%}
 				<TimeStamp><when>{{ data['connect_ts_Z'] }}</when>
 				</TimeStamp>
 				{% endif -%}
