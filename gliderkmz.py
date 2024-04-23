@@ -614,6 +614,7 @@ def main(args):
         message.write(content)
 
     kmz_filename = convert_kml_to_kmz(savefile, kmz_file_path=None)
+    print(f'kmz file location: {kmz_filename}')
 
     # remove the kml file if the kmz file was written
     if os.path.isfile(kmz_filename):
