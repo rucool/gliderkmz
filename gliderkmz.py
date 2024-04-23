@@ -3,7 +3,7 @@
 """
 Author: lgarzio and lnazzaro on 2/28/2024
 Last modified: lgarzio on 4/23/2024
-Test glider kmz generation
+Generate glider .kmzs for either 1) all active deployments or 2) a user specified deployment
 """
 
 import os
@@ -340,7 +340,6 @@ def main(args):
             calculator = MagneticFieldCalculator(model='igrf')
             sensor_df = sensor_data['m_water_vx'][['ts', 'epoch_seconds', 'lat', 'lon']].copy()
             sensor_df.insert(0, 'sensor', 'calculated_declination')
-            # sensor_df.insert(1, 'units', 'rad')
             sensor_df.insert(1, 'units', 'degrees')
             sensor_df.insert(2, 'value', np.nan)
             sensor_df['date'] = sensor_df['ts'].dt.date
@@ -350,7 +349,6 @@ def main(args):
                                 longitude=np.nanmedian(sensor_df['lon'][di]),
                                 altitude=0,
                                 date=d)
-                # sensor_df.loc[di,'value'] = -result['field-value']['declination']['value']*np.pi/180
                 sensor_df.loc[di, 'value'] = -result['field-value']['declination']['value']  # units = degrees
             sensor_data['m_gps_mag_var'] = sensor_df
 
@@ -515,8 +513,6 @@ def main(args):
             for sensor in ['m_battery', 'm_vacuum']:
                 add_sensor_values(surface_events_dict[folder_name][idx]['surface_event_popup'],
                                   sensor, sensor_data[sensor], thresholds=sensor_thresholds)
-
-            # TODO calculate drift time??
 
             if idx == 0:  # deployment location
                 surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed'] = format_float(current_speed)  # m/s
