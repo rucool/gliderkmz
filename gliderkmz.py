@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lgarzio on 4/23/2024
+Last modified: lgarzio on 5/7/2024
 Generate glider .kmzs for either 1) all active deployments or 2) a user specified deployment
 """
 
@@ -43,10 +43,10 @@ def add_sensor_values(data_dict, sensor_name, sdf, thresholds=None):
     cts = pd.to_datetime(data_dict['connect_ts'])
     dcts = pd.to_datetime(data_dict['disconnect_ts'])
     t0 = cts - pd.Timedelta(minutes=15)
-    t1 = dcts + pd.Timedelta(minutes=15)
 
     try:
-        sensor_value = format_float(np.median(sdf.loc[np.logical_and(sdf.ts >= t0, sdf.ts <= t1)].value))
+        sdf_sel = sdf.loc[np.logical_and(sdf.ts >= t0, sdf.ts <= dcts)].sort_values(by='epoch_seconds')
+        sensor_value = format_float(np.array(sdf_sel.value)[-1])  # grab the latest value reported for this surfacing
         if np.isnan(sensor_value):
             sensor_value = None
             bgcolor = 'BEA60E'  # yellow BEA60E
@@ -59,7 +59,7 @@ def add_sensor_values(data_dict, sensor_name, sdf, thresholds=None):
                     bgcolor = 'BEA60E'  # yellow BEA60E
                 elif 'fail_low' in sthresholds.keys() and sensor_value <= sthresholds['fail_low']:
                     bgcolor = 'darkred'  # yellow BEA60E
-                elif 'fail_high' in sthresholds.keys() and sensor_value <= sthresholds['fail_high']:
+                elif 'fail_high' in sthresholds.keys() and sensor_value >= sthresholds['fail_high']:
                     bgcolor = 'darkred'  # yellow BEA60E
             else:
                 bgcolor = 'BEA60E'  # yellow BEA60E
@@ -527,17 +527,15 @@ def main(args):
                 # calculate dive/speed from previous surfacing info
                 prev_row = surface_events_df.iloc[idx - 1].to_dict()
 
-                # calculate dive/drift time and distance
-                dive_time_seconds = se['connect_time_epoch'] - prev_row['disconnect_time_epoch']
-                dive_time_minutes = format_float(dive_time_seconds / 60)
+                # calculate time elapsed and distance since last surfacing
+                time_elapsed_seconds = se['connect_time_epoch'] - prev_row['disconnect_time_epoch']
+                time_elapsed_minutes = format_float(time_elapsed_seconds / 60)
 
-                dive_distance = format_float(geopy.distance.geodesic((prev_row['gps_lat_degrees'], prev_row['gps_lon_degrees']),
-                                                                     (se['gps_lat_degrees'], se['gps_lon_degrees'])).km)
-                drift_time_minutes = None
-                drift_distance = None
+                distance_travelled = format_float(geopy.distance.geodesic((prev_row['gps_lat_degrees'], prev_row['gps_lon_degrees']),
+                                                                          (se['gps_lat_degrees'], se['gps_lon_degrees'])).km)
 
                 # calculate total speed and bearing
-                total_speed = dive_distance * 1000 / dive_time_seconds
+                total_speed = distance_travelled * 1000 / time_elapsed_seconds
 
                 total_bearing = calculate_compass_bearing((prev_row['gps_lat_degrees'], prev_row['gps_lon_degrees']),
                                                           (se['gps_lat_degrees'], se['gps_lon_degrees']))
@@ -551,19 +549,9 @@ def main(args):
                     glide_bearing = None
                     glide_speed = None
 
-                # if the call length is very short, the glider is likely drifting at the surface
-                # TODO there has to be a better way to do this. when a glider is in shipping lanes they keep calls very short
-                if se['call_length_seconds'] < 60:
-                    drift_time_minutes = dive_time_minutes
-                    drift_distance = dive_distance
-                    dive_time_minutes = None
-                    dive_distance = None
-
                 # add dive and current information to the surfacing event (time, distance, speed)
-                surface_events_dict[folder_name][idx]['surface_event_popup']['dive_time'] = dive_time_minutes  # minutes
-                surface_events_dict[folder_name][idx]['surface_event_popup']['dive_dist'] = dive_distance  # km
-                surface_events_dict[folder_name][idx]['surface_event_popup']['drift_time'] = drift_time_minutes  # minutes
-                surface_events_dict[folder_name][idx]['surface_event_popup']['drift_dist'] = drift_distance  # km
+                surface_events_dict[folder_name][idx]['surface_event_popup']['time_elapsed'] = time_elapsed_minutes  # minutes
+                surface_events_dict[folder_name][idx]['surface_event_popup']['dist'] = distance_travelled  # km
                 surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed'] = format_float(total_speed)  # m/s
                 surface_events_dict[folder_name][idx]['surface_event_popup']['total_speed_bearing'] = format_int(total_bearing)
                 surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed'] = format_float(current_speed)  # m/s
