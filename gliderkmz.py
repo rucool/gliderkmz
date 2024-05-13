@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lgarzio on 5/10/2024
+Last modified: lgarzio on 5/13/2024
 Generate glider .kmzs for either 1) all active deployments or 2) a user specified deployment
 """
 
@@ -169,21 +169,24 @@ def convert_kml_to_kmz(kml_file_path, kmz_file_path=None):
     return kmz_file_path
 
 
-def format_coordinates(x):
+def format_coordinates(x, decimal_degrees=False):
     """
-    Convert lat/lon coordinates from nmea to decimal degrees
+    Convert lat/lon coordinates from nmea to degrees decimal minutes
     """
     try:
         decdegrees = np.sign(x) * (np.floor(np.abs(x)/100) + np.mod(np.abs(x), 100) / 60)
 
         # convert from decimal degrees to degrees decimal minutes
         minutes, degrees = math.modf(decdegrees)
-        deg_decimins = f'{int(degrees)} {np.round(abs(minutes * 60), 3)}'
+        output = f'{int(degrees)} {np.round(abs(minutes * 60), 3)}'
+
+        if decimal_degrees:  # return decimal degrees instead of degrees decimal minutes
+            output = decdegrees
 
     except TypeError:
-        deg_decimins = None
+        output = None
 
-    return deg_decimins
+    return output
 
 
 def format_ewo(ewo):
@@ -585,8 +588,8 @@ def main(args):
             cwpt_since=last_surfacing_popup_dict['disconnect_ts'],
             cwpt_lat=ls_api['waypoint_lat'],
             cwpt_lon=ls_api['waypoint_lon'],
-            cwpt_lat_degrees=format_coordinates(ls_api['waypoint_lat']),
-            cwpt_lon_degrees=format_coordinates(ls_api['waypoint_lon']),
+            cwpt_lat_degrees=format_coordinates(ls_api['waypoint_lat'], decimal_degrees=True),
+            cwpt_lon_degrees=format_coordinates(ls_api['waypoint_lon'], decimal_degrees=True),
             distance_flown_km=distance_flown_km,
             days_deployed=days_deployed,
             iridium_mins=format_int(np.round(total_iridium_seconds / 60)),
