@@ -11,7 +11,7 @@
 <th width="200" align="right">Disconnected:</th><td width="200">{{ data['disconnect_ts'] }} GMT</td>
 </tr>
 <tr>
-<th width="200" align="right">GPS Position:</th><td width="200">{{ data['gps_lat'] }}<b> N</b> / {{ data['gps_lon'] }}<b> W</b></td>
+<th width="200" align="right">GPS Position:</th><td width="200">{{ data['gps_lat'] }}  {{ data['gps_lon'] }}</td>
 </tr>
 <tr>
 <th width="200" align="right">GPS Acquired:</th><td bgcolor={{ data['gps_bgcolor'] }} width=200><font color="white">{{ data['gps_connect_ts'] }} GMT</font></td>
@@ -100,7 +100,7 @@
 <table bgcolor="white">
 {%- if data['waypoint_lat'] -%}
 <tr>
-<th width="200" align="right">Waypoint Location:</th><td width="200">{{ data['waypoint_lat'] }}<b> N</b> / {{ data['waypoint_lon'] }}<b> W</b></td>
+<th width="200" align="right">Waypoint Location:</th><td width="200">{{ data['waypoint_lat'] }}  {{ data['waypoint_lon'] }}</td>
 </tr>
 {%- endif -%}
 {%- if data['waypoint_range'] -%}

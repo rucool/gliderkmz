@@ -99,8 +99,8 @@ def build_popup_dict(data):
     popup_dict = dict(
         connect_ts=connect_ts,
         disconnect_ts=disconnect_ts,
-        gps_lat=format_coordinates(data['gps_lat']),
-        gps_lon=format_coordinates(data['gps_lon']),
+        gps_lat=format_coordinates_str(data['gps_lat'], 'lat'),
+        gps_lon=format_coordinates_str(data['gps_lon'], 'lon'),
         gps_connect_ts=gps_connect_ts,
         gps_bgcolor=gps_bgcolor,
         reason=data['surface_reason'],
@@ -111,8 +111,8 @@ def build_popup_dict(data):
         segment_ewo=format_ewo(segment_ewo),
         mission_ewo=format_ewo(mission_ewo),
         total_ewo=format_ewo(total_ewo),
-        waypoint_lat=format_coordinates(data['waypoint_lat']),
-        waypoint_lon=format_coordinates(data['waypoint_lon']),
+        waypoint_lat=format_coordinates_str(data['waypoint_lat'], 'lat'),
+        waypoint_lon=format_coordinates_str(data['waypoint_lon'], 'lon'),
         waypoint_range=format_float(waypoint_range_km),
         waypoint_bearing=format_int(data['waypoint_bearing_degrees'])
     )
@@ -169,19 +169,43 @@ def convert_kml_to_kmz(kml_file_path, kmz_file_path=None):
     return kmz_file_path
 
 
-def format_coordinates(x, decimal_degrees=False):
+def convert_coordinates(x):
     """
-    Convert lat/lon coordinates from nmea to degrees decimal minutes
+    Convert lat/lon coordinates from nmea to decimal degrees
+    """
+    try:
+        output = np.sign(x) * (np.floor(np.abs(x)/100) + np.mod(np.abs(x), 100) / 60)
+
+    except TypeError:
+        output = None
+
+    return output
+
+
+def format_coordinates_str(x, version):
+    """
+    Convert lat/lon coordinates from nmea to degrees decimal minutes string format
+    version: 'lat' or 'lon'
     """
     try:
         decdegrees = np.sign(x) * (np.floor(np.abs(x)/100) + np.mod(np.abs(x), 100) / 60)
 
+        if version == 'lat':
+            if x >= 0:
+                hemis = 'N'
+            else:
+                hemis = 'S'
+        elif version == 'lon':
+            if x >= 0:
+                hemis = 'E'
+            else:
+                hemis = 'W'
+        else:
+            ValueError('Incorrect version provided')
+
         # convert from decimal degrees to degrees decimal minutes
         minutes, degrees = math.modf(decdegrees)
-        output = f'{int(degrees)} {np.round(abs(minutes * 60), 3)}'
-
-        if decimal_degrees:  # return decimal degrees instead of degrees decimal minutes
-            output = decdegrees
+        output = f"{int(abs(degrees))}\N{DEGREE SIGN} {np.round(abs(minutes * 60), 3)}'{hemis}"
 
     except TypeError:
         output = None
@@ -588,8 +612,8 @@ def main(args):
             cwpt_since=last_surfacing_popup_dict['disconnect_ts'],
             cwpt_lat=ls_api['waypoint_lat'],
             cwpt_lon=ls_api['waypoint_lon'],
-            cwpt_lat_degrees=format_coordinates(ls_api['waypoint_lat'], decimal_degrees=True),
-            cwpt_lon_degrees=format_coordinates(ls_api['waypoint_lon'], decimal_degrees=True),
+            cwpt_lat_degrees=convert_coordinates(ls_api['waypoint_lat']),
+            cwpt_lon_degrees=convert_coordinates(ls_api['waypoint_lon']),
             distance_flown_km=distance_flown_km,
             days_deployed=days_deployed,
             iridium_mins=format_int(np.round(total_iridium_seconds / 60)),
