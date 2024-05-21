@@ -256,7 +256,7 @@ def main(args):
     with open(sensor_thresholds_yml) as f:
         sensor_thresholds = yaml.safe_load(f)
 
-    glider_tails = 'https://rucool.marine.rutgers.edu/gliders/glider_tails/'  # /www/web/rucool/gliders/glider_tails
+    glider_tails = 'https://rucool.marine.rutgers.edu/gliders/glider_tails/'
     # old glider tails location: https://marine.rutgers.edu/~kerfoot/icons/glider_tails/
 
     # inspired by colorblind-friendly colormap (https://mpetroff.net/2018/03/color-cycle-picker/) for tracks/points
