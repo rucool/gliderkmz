@@ -13,11 +13,14 @@ if [ -f ~/.bashrc ]; then
 . ~/.bashrc
 fi
 
-EXECDIR=/home/glideradm/code/kmz/gliderkmz 
+EXECDIR=/path/to/repo
+TEMPLATES=/path/to/kml/templates
+STHRESHOLDS=/path/to/sensor_thresholds.yml
+SAVEDIR=/path/to/savedir
 conda activate gliderkmz
 
 for kmltype in deployed deployed_ts deployed_uv deployed_uv_ts
 do
     echo "Writing active kmz file for $kmltype"
-    python ${EXECDIR}/gliderkmz.py active -kml_type $kmltype
+    python ${EXECDIR}/gliderkmz.py active -kml_type $kmltype -t $TEMPLATES -st $STHRESHOLDS -s $SAVEDIR
 done
