@@ -98,7 +98,7 @@ if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description=main.__doc__,
                                          formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    arg_parser.add_argument('-c', '--configdir',
+    arg_parser.add_argument('configdir',
                             type=str,
                             help='Directory containing active_deployments.yml configuration file (if available), or '
                                  'directory where new active_deployments.yml file will be saved')
