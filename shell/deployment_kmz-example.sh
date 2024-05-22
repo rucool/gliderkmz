@@ -18,12 +18,12 @@ fi
 DEPLOYMENT=$1
 XECDIR=/path/to/repo
 TEMPLATES=/path/to/kml/templates
-STHRESHOLDS=/path/to/sensor_thresholds.yml
+CONFIGDIR=/path/to/config_files
 SAVEDIR=/path/to/savedir
 conda activate gliderkmz
 
 for kmltype in deployed deployed_ts deployed_uv deployed_uv_ts
 do
     echo "Writing kmz file for: $DEPLOYMENT $kmltype"
-    python ${EXECDIR}/gliderkmz.py $DEPLOYMENT -kml_type $kmltype -t $TEMPLATES -st $STHRESHOLDS -s $SAVEDIR
+    python ${EXECDIR}/gliderkmz.py $DEPLOYMENT -kml_type $kmltype -t $TEMPLATES -c $CONFIGDIR -s $SAVEDIR
 done
