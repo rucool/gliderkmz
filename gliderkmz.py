@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lgarzio on 5/21/2024
+Last modified: lgarzio on 5/22/2024
 Generate glider .kmzs for either 1) all active deployments or 2) a user specified deployment
 """
 
@@ -248,24 +248,16 @@ def main(args):
     deployment = args.deployment
     kml_type = args.kml_type
     templatedir = args.templatedir
-    sensor_thresholds_yml = args.sensor_thresholds
+    configdir = args.configdir
     savedir = args.savedir
 
     sensor_list = ['m_battery', 'm_vacuum', 'm_water_vx', 'm_water_vy', 'm_gps_mag_var']
 
+    sensor_thresholds_yml = os.path.join(configdir, 'sensor_thresholds.yml')
     with open(sensor_thresholds_yml) as f:
         sensor_thresholds = yaml.safe_load(f)
 
     glider_tails = 'https://rucool.marine.rutgers.edu/gliders/glider_tails/'
-    # old glider tails location: https://marine.rutgers.edu/~kerfoot/icons/glider_tails/
-
-    # inspired by colorblind-friendly colormap (https://mpetroff.net/2018/03/color-cycle-picker/) for tracks/points
-    # NOTE: kml colors are encoded backwards from the HTML convention. HTML colors are "#rrggbbaa": Red Green Blue
-    # Alpha, while KML colors are "AABBGGRR": Alpha Blue Green Red.
-
-    # teal ('ffe9d043'), purple ('ffd7369e'), yellow ('ff43d0e9'), pink ('ff9e36d7'), orange ('ff3877f3'),
-    # green ('ff83c995'), gray ('ffc4c9d8')
-    colors = ['ffe9d043', 'ffd7369e', 'ff43d0e9', 'ff9e36d7', 'ff3877f3', 'ff83c995', 'ffc4c9d8']
 
     # load the templates
     environment = Environment(loader=FileSystemLoader(templatedir))
@@ -286,18 +278,26 @@ def main(args):
 
     glider_api = 'https://marine.rutgers.edu/cool/data/gliders/api/'
 
-    glider_deployments = []
     if deployment == 'active':  # 'deployed' 'deployed_ts' 'deployed_uv' 'deployed_uv_ts'
         savefile = os.path.join(savedir, f'active_deployments{ext}.kml')
         document_name = 'Active Deployments'
-        active_deployments = requests.get(f'{glider_api}deployments/?active').json()['data']
-        for ad in active_deployments:
-            glider_deployments.append(ad['deployment_name'])
 
-        # duplicate track colors if necessary
-        if len(glider_deployments) > len(colors):
-            repeatx = int(np.ceil(len(glider_deployments) / len(colors)))
-            colors = colors * repeatx
+        # load the active_deployments configuration file (generated with setup_active_deployments_yaml.py)
+        active_deployments_config = os.path.join(configdir, 'active_deployments.yml')
+        with open(active_deployments_config) as f:
+            ad_config = yaml.safe_load(f)
+
+        # make sure the config file is up-to-date
+        active_deployments_api = requests.get(f'{glider_api}deployments/?active').json()['data']
+        glider_deployments_api = []
+        for ad in active_deployments_api:
+            glider_deployments_api.append(ad['deployment_name'])
+
+        difference = list(set(glider_deployments_api).symmetric_difference(set(list(ad_config['deployments'].keys()))))
+        if len(difference) > 0:
+            raise ValueError('active_deployments.yml is not up-to-date')
+
+        glider_deployments = ad_config['deployments']
 
     else:
         glider_regex = re.compile(r'^(.*)-(\d{8}T\d{4})')
@@ -322,12 +322,12 @@ def main(args):
         os.makedirs(savedir, exist_ok=True)
         savefile = os.path.join(savedir, f'{deployment}{ext}.kml')
         document_name = 'Glider Deployments'
-        glider_deployments.append(deployment)
-        colors = ['ff43d0e9']  # yellow
+
+        glider_deployments = {deployment: 'ff43d0e9'}  # track color = yellow
 
     format_dict = dict()
     deployment_dict = dict()
-    for glider_idx, gd in enumerate(glider_deployments):
+    for gd, track_color in glider_deployments.items():
         deployment_api = requests.get(f'{glider_api}deployments/?deployment={gd}').json()['data'][0]
 
         # build the dictionary for the formatting section of the kml
@@ -337,7 +337,7 @@ def main(args):
         format_dict[deployment_name] = dict(
             name=glider_name,
             glider_tail=glider_tail,
-            deployment_color=colors[glider_idx]
+            deployment_color=track_color
         )
 
         # get distance flown and calculate days deployed
@@ -661,9 +661,9 @@ if __name__ == '__main__':
                             type=str,
                             help='Directory containing template .kmls')
 
-    arg_parser.add_argument('-st', '--sensor_thresholds',
+    arg_parser.add_argument('-c', '--configdir',
                             type=str,
-                            help='yaml file containing values for sensor thresholds')
+                            help='Directory containing required configuration files: active_deployments.yml and sensor_thresholds.yml')
 
     arg_parser.add_argument('-s', '--savedir',
                             type=str,
