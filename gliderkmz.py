@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lgarzio on 5/22/2024
+Last modified: lgarzio on 5/31/2024
 Generate glider .kmzs for either 1) all active deployments or 2) a user specified deployment
 """
 
@@ -318,7 +318,7 @@ def main(args):
             print('need to enable logging')
             ## exit the script????
 
-        savedir = os.path.join(savedir, 'deployments', str(trajectory_dt.year), deployment)
+        savedir = os.path.join(savedir, str(trajectory_dt.year), deployment, 'kmz')
         os.makedirs(savedir, exist_ok=True)
         savefile = os.path.join(savedir, f'{deployment}{ext}.kml')
         document_name = 'Glider Deployments'
