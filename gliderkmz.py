@@ -392,10 +392,13 @@ def main(args):
         track_features = requests.get(f'{glider_api}tracks/?deployment={deployment_name}').json()['features']
         for tf in track_features:
             if tf['geometry']['type'] == 'Point':
-                track_dict['gps_epoch'] = np.append(track_dict['gps_epoch'], tf['properties']['gps_epoch'])
-                track_dict['lon'] = np.append(track_dict['lon'], tf['geometry']['coordinates'][0])
-                track_dict['lat'] = np.append(track_dict['lat'], tf['geometry']['coordinates'][1])
-                track_dict['sid'] = np.append(track_dict['sid'], tf['properties']['sid'])
+                try:
+                    track_dict['gps_epoch'] = np.append(track_dict['gps_epoch'], tf['properties']['gps_epoch'])
+                    track_dict['lon'] = np.append(track_dict['lon'], tf['geometry']['coordinates'][0])
+                    track_dict['lat'] = np.append(track_dict['lat'], tf['geometry']['coordinates'][1])
+                    track_dict['sid'] = np.append(track_dict['sid'], tf['properties']['sid'])
+                except KeyError:
+                    continue  # these cases can be waypoints instead of points on the actual glider track
 
         # add the last surfacing to the dictionary
         ls_api = deployment_api['last_surfacing']
