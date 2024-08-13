@@ -532,6 +532,9 @@ def main(args):
                 except TypeError:
                     # if end lat/lon can't be calculated, remove this record from the currents dictionary
                     del currents_dict[currents_folder_name][idx]
+            else:
+                current_bearing = None
+                current_speed = None
 
             surface_events_dict[folder_name][idx] = dict(
                 connect_ts=surface_event_popup['connect_ts'],
