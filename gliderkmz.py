@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lgarzio on 5/31/2024
+Last modified: lnazzaro on 8/13/2024
 Generate glider .kmzs for either 1) all active deployments or 2) a user specified deployment
 """
 
@@ -492,45 +492,46 @@ def main(args):
                 lat_degrees_start=se['gps_lat_degrees']
             )
 
-            # calculate depth-averaged currents
-            # find m_water_vx, m_water_vy and m_gps_mag_var for this surfacing
-            for sensor in ['m_water_vx', 'm_water_vy', 'm_gps_mag_var']:
-                add_sensor_values(currents_dict[currents_folder_name][idx], sensor, sensor_data[sensor])
+            if 'm_water_vx' in sensor_data.keys() and 'm_water_vy' in sensor_data.keys():
+                # calculate depth-averaged currents
+                # find m_water_vx, m_water_vy and m_gps_mag_var for this surfacing
+                for sensor in ['m_water_vx', 'm_water_vy', 'm_gps_mag_var']:
+                    add_sensor_values(currents_dict[currents_folder_name][idx], sensor, sensor_data[sensor])
 
-            # rotate from magnetic plane to true plane and calculate current speed and angle
-            surfacing_m_water_vx = currents_dict[currents_folder_name][idx]['m_water_vx']
-            surfacing_m_water_vy = currents_dict[currents_folder_name][idx]['m_water_vy']
-            surfacing_m_gps_mag_var = currents_dict[currents_folder_name][idx]['m_gps_mag_var']
+                # rotate from magnetic plane to true plane and calculate current speed and angle
+                surfacing_m_water_vx = currents_dict[currents_folder_name][idx]['m_water_vx']
+                surfacing_m_water_vy = currents_dict[currents_folder_name][idx]['m_water_vy']
+                surfacing_m_gps_mag_var = currents_dict[currents_folder_name][idx]['m_gps_mag_var']
 
-            vx_test = isinstance(surfacing_m_water_vx, float)
-            vy_test = isinstance(surfacing_m_water_vy, float)
-            mag_test = isinstance(surfacing_m_gps_mag_var, float)
-            if np.logical_and(np.logical_and(vx_test, vy_test), mag_test):
-                # units: current_bearing = degrees, current_speed = m/s
-                current_bearing, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy,
-                                                          mag=-surfacing_m_gps_mag_var)
-            elif np.logical_and(vx_test, vy_test):
-                # calculate m_gps_mag_var if it's not there
-                calculator = MagneticFieldCalculator(model='igrf')
-                result = calculator.calculate(latitude=se['gps_lat_degrees'],
-                                              longitude=se['gps_lon_degrees'],
-                                              altitude=0,
-                                              date=currents_folder_name)
-                mag = -result['field-value']['declination']['value']
-                current_bearing, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy, mag=-mag)
-            else:
-                current_bearing = None
-                current_speed = None
+                vx_test = isinstance(surfacing_m_water_vx, float)
+                vy_test = isinstance(surfacing_m_water_vy, float)
+                mag_test = isinstance(surfacing_m_gps_mag_var, float)
+                if np.logical_and(np.logical_and(vx_test, vy_test), mag_test):
+                    # units: current_bearing = degrees, current_speed = m/s
+                    current_bearing, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy,
+                                                            mag=-surfacing_m_gps_mag_var)
+                elif np.logical_and(vx_test, vy_test):
+                    # calculate m_gps_mag_var if it's not there
+                    calculator = MagneticFieldCalculator(model='igrf')
+                    result = calculator.calculate(latitude=se['gps_lat_degrees'],
+                                                longitude=se['gps_lon_degrees'],
+                                                altitude=0,
+                                                date=currents_folder_name)
+                    mag = -result['field-value']['declination']['value']
+                    current_bearing, current_speed = uv2spdir(surfacing_m_water_vx, surfacing_m_water_vy, mag=-mag)
+                else:
+                    current_bearing = None
+                    current_speed = None
 
-            # calculate where the glider will be in 1 day floating at surface
-            try:
-                distance_1day_km = current_speed * 86400 / 1000
-                dest_1day = geopy.distance.distance(kilometers=distance_1day_km).destination((se['gps_lat_degrees'], se['gps_lon_degrees']), bearing=current_bearing)
-                currents_dict[currents_folder_name][idx]['lon_degrees_end'] = dest_1day.longitude
-                currents_dict[currents_folder_name][idx]['lat_degrees_end'] = dest_1day.latitude
-            except TypeError:
-                # if end lat/lon can't be calculated, remove this record from the currents dictionary
-                del currents_dict[currents_folder_name][idx]
+                # calculate where the glider will be in 1 day floating at surface
+                try:
+                    distance_1day_km = current_speed * 86400 / 1000
+                    dest_1day = geopy.distance.distance(kilometers=distance_1day_km).destination((se['gps_lat_degrees'], se['gps_lon_degrees']), bearing=current_bearing)
+                    currents_dict[currents_folder_name][idx]['lon_degrees_end'] = dest_1day.longitude
+                    currents_dict[currents_folder_name][idx]['lat_degrees_end'] = dest_1day.latitude
+                except TypeError:
+                    # if end lat/lon can't be calculated, remove this record from the currents dictionary
+                    del currents_dict[currents_folder_name][idx]
 
             surface_events_dict[folder_name][idx] = dict(
                 connect_ts=surface_event_popup['connect_ts'],
