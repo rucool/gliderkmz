@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lnazzaro on 8/13/2024
+Last modified: lgarzio on 8/20/2024
 Generate glider .kmzs for either 1) all active deployments or 2) a user specified deployment
 """
 
@@ -547,8 +547,11 @@ def main(args):
 
             # add values for battery and vacuum to the surface event popup
             for sensor in ['m_battery', 'm_vacuum']:
-                add_sensor_values(surface_events_dict[folder_name][idx]['surface_event_popup'],
-                                  sensor, sensor_data[sensor], thresholds=sensor_thresholds)
+                try:
+                    add_sensor_values(surface_events_dict[folder_name][idx]['surface_event_popup'],
+                                      sensor, sensor_data[sensor], thresholds=sensor_thresholds)
+                except KeyError:
+                    continue
 
             if idx == 0:  # deployment location
                 surface_events_dict[folder_name][idx]['surface_event_popup']['current_speed'] = format_float(current_speed)  # m/s
