@@ -391,7 +391,7 @@ def main(args):
         )
         track_features = requests.get(f'{glider_api}tracks/?deployment={deployment_name}').json()['features']
         for tf in track_features:
-            if tf['geometry']['type'] == 'Point':
+            if tf['geometry']['type'] == 'Point' and 'waypoint' not in tf['properties'].keys():
                 try:
                     track_dict['gps_epoch'] = np.append(track_dict['gps_epoch'], tf['properties']['gps_epoch'])
                     track_dict['lon'] = np.append(track_dict['lon'], tf['geometry']['coordinates'][0])
