@@ -2,7 +2,7 @@
 
 """
 Author: lgarzio and lnazzaro on 2/28/2024
-Last modified: lgarzio on 8/20/2024
+Last modified: lgarzio on 11/7/2024
 Generate glider .kmzs for either 1) all active deployments or 2) a user specified deployment
 """
 
@@ -400,12 +400,13 @@ def main(args):
                 except KeyError:
                     continue  # these cases can be waypoints instead of points on the actual glider track
 
-        # add the last surfacing to the dictionary
+        # # add the last surfacing to the dictionary - 2024-11-07 track API endpoint is fixed, last surfacing is now
+        # # in that API, don't need to add it anymore from the deployment API
         ls_api = deployment_api['last_surfacing']
-        track_dict['gps_epoch'] = np.append(track_dict['gps_epoch'], ls_api['connect_time_epoch'])
-        track_dict['lon'] = np.append(track_dict['lon'], ls_api['gps_lon_degrees'])
-        track_dict['lat'] = np.append(track_dict['lat'], ls_api['gps_lat_degrees'])
-        track_dict['sid'] = np.append(track_dict['sid'], ls_api['surfacing_id'])
+        # track_dict['gps_epoch'] = np.append(track_dict['gps_epoch'], ls_api['connect_time_epoch'])
+        # track_dict['lon'] = np.append(track_dict['lon'], ls_api['gps_lon_degrees'])
+        # track_dict['lat'] = np.append(track_dict['lat'], ls_api['gps_lat_degrees'])
+        # track_dict['sid'] = np.append(track_dict['sid'], ls_api['surfacing_id'])
 
         # convert to dataframe to sort by time
         track_df = pd.DataFrame(track_dict)
